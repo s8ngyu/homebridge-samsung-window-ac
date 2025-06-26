@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "SamsungWindowAC",
   "pluginType": "platform",
   "singular": true,
   "strictValidation": false,

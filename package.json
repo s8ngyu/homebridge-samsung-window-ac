@@ -1,6 +1,6 @@
 {
-  "name": "homebridge-plugin-name",
-  "displayName": "Plugin Name",
+  "name": "homebridge-samsung-window-ac",
+  "displayName": "Homebridge Samsung Window AC",
   "type": "module",
   "version": "1.0.0",
   "private": true,
