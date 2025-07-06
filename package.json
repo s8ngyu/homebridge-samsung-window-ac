@@ -4,7 +4,7 @@
   "type": "module",
   "version": "1.0.0",
   "private": true,
-  "description": "A short description about what your plugin does.",
+  "description": "Homebridge plugin for Samsung Window Air Conditioners",
   "author": "Your Name",
   "license": "Apache-2.0",
   "homepage": "https://github.com/USERNAME/GITHUB_PROJECT_NAME#readme",
@@ -16,7 +16,11 @@
     "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "samsung",
+    "air-conditioner",
+    "window-ac",
+    "thermostat"
   ],
   "main": "dist/index.js",
   "engines": {
