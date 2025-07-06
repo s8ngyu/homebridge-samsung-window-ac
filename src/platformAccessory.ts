@@ -267,7 +267,13 @@ export class SamsungWindowACAccessory {
       } else {
         const homeKitMode = this.samsungModeToHomeKit(acMode);
         // HomeKit CurrentHeatingCoolingState max value is 2, so convert Auto (3) to Cool (2)
-        this.acStates.CurrentHeatingCoolingState = homeKitMode > 2 ? 2 : homeKitMode;
+        // But we'll use Cool (2) for Auto mode since it's the most appropriate representation
+        if (homeKitMode === 3) {
+          this.acStates.CurrentHeatingCoolingState = 2; // Auto -> Cool for current state
+          this.platform.log.debug(`Auto mode detected, showing as Cool (2) for CurrentHeatingCoolingState`);
+        } else {
+          this.acStates.CurrentHeatingCoolingState = homeKitMode;
+        }
       }
       
       this.platform.log.debug(`Get Characteristic CurrentHeatingCoolingState -> ${this.acStates.CurrentHeatingCoolingState} (from mode: ${acMode})`);
@@ -314,6 +320,7 @@ export class SamsungWindowACAccessory {
         let currentState = homeKitMode;
         if (homeKitMode === 3) {
           currentState = 2; // Auto -> Cool for current state
+          this.platform.log.debug(`Auto mode set, CurrentHeatingCoolingState will show as Cool (2)`);
         }
         this.acStates.CurrentHeatingCoolingState = currentState;
       }
