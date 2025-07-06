@@ -45,6 +45,15 @@ export class SamsungWindowACAccessory {
   };
 
   /**
+   * Cache for device status to reduce API calls
+   */
+  private statusCache: {
+    data: any;
+    timestamp: number;
+  } | null = null;
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+  /**
    * Convert Samsung AC mode to HomeKit mode
    */
   private samsungModeToHomeKit(samsungMode: string): number {
@@ -56,6 +65,31 @@ export class SamsungWindowACAccessory {
    */
   private homeKitModeToSamsung(homeKitMode: number): string {
     return HOMEKIT_MODE_MAPPING[homeKitMode as keyof typeof HOMEKIT_MODE_MAPPING] ?? 'off';
+  }
+
+  /**
+   * Get device status with caching
+   */
+  private async getDeviceStatus(): Promise<any> {
+    const now = Date.now();
+    
+    // Check if cache is valid
+    if (this.statusCache && (now - this.statusCache.timestamp) < this.CACHE_DURATION) {
+      this.platform.log.debug('Using cached device status');
+      return this.statusCache.data;
+    }
+
+    // Get fresh data from API
+    const status = await this.platform.getDeviceStatus();
+    if (status) {
+      this.statusCache = {
+        data: status,
+        timestamp: now
+      };
+      this.platform.log.debug('Updated device status cache');
+    }
+    
+    return status;
   }
 
   constructor(
@@ -206,40 +240,43 @@ export class SamsungWindowACAccessory {
    * Handle "GET" requests from HomeKit for Active
    */
   async getActive(): Promise<CharacteristicValue> {
-    // Get switch status from SmartThings API
-    const switchStatus = await this.platform.getSwitchStatus();
-    
-    if (switchStatus !== null) {
-      const isActive = switchStatus === 'on';
+    const status = await this.getDeviceStatus();
+    if (status) {
+      const isActive = status.components.main.switch.switch.value === 'on';
       this.acStates.Active = isActive;
-      this.platform.log.debug(`Get Characteristic Active from SmartThings (${switchStatus}) -> ${isActive}`);
+      this.platform.log.debug(`Get Characteristic Active -> ${isActive}`);
       return isActive;
-    } else {
-      // Fallback to cached state if API call fails
-      const cachedActive = this.acStates.Active;
-      this.platform.log.debug('Get Characteristic Active from cache ->', cachedActive);
-      return cachedActive;
     }
+    
+    // Fallback to cached state if API fails
+    this.platform.log.debug(`Get Characteristic Active -> ${this.acStates.Active} (cached)`);
+    return this.acStates.Active;
   }
 
   /**
    * Handle "GET" requests from HomeKit for CurrentHeatingCoolingState
    */
   async getCurrentHeatingCoolingState(): Promise<CharacteristicValue> {
-    // Get AC mode from SmartThings API
-    const samsungMode = await this.platform.getCurrentACMode();
-    
-    if (samsungMode !== null) {
-      const homeKitMode = this.samsungModeToHomeKit(samsungMode);
-      this.acStates.CurrentHeatingCoolingState = homeKitMode;
-      this.platform.log.debug(`Get Characteristic CurrentHeatingCoolingState from SmartThings (${samsungMode} -> ${homeKitMode})`);
-      return homeKitMode;
-    } else {
-      // Fallback to cached state if API call fails
-      const cachedState = this.acStates.CurrentHeatingCoolingState;
-      this.platform.log.debug('Get Characteristic CurrentHeatingCoolingState from cache ->', cachedState);
-      return cachedState;
+    const status = await this.getDeviceStatus();
+    if (status) {
+      const acMode = status.components.main.airConditionerMode.airConditionerMode.value;
+      const isActive = status.components.main.switch.switch.value === 'on';
+      
+      if (!isActive) {
+        this.acStates.CurrentHeatingCoolingState = 0; // Off
+      } else {
+        const homeKitMode = this.samsungModeToHomeKit(acMode);
+        // HomeKit CurrentHeatingCoolingState max value is 2, so convert Auto (3) to Cool (2)
+        this.acStates.CurrentHeatingCoolingState = homeKitMode > 2 ? 2 : homeKitMode;
+      }
+      
+      this.platform.log.debug(`Get Characteristic CurrentHeatingCoolingState -> ${this.acStates.CurrentHeatingCoolingState} (from mode: ${acMode})`);
+      return this.acStates.CurrentHeatingCoolingState;
     }
+    
+    // Fallback to cached state if API fails
+    this.platform.log.debug(`Get Characteristic CurrentHeatingCoolingState -> ${this.acStates.CurrentHeatingCoolingState} (cached)`);
+    return this.acStates.CurrentHeatingCoolingState;
   }
 
   /**
@@ -273,7 +310,12 @@ export class SamsungWindowACAccessory {
       this.acStates.TargetHeatingCoolingState = homeKitMode;
       
       if (this.acStates.Active) {
-        this.acStates.CurrentHeatingCoolingState = homeKitMode;
+        // CurrentHeatingCoolingState cannot be Auto (3), so convert Auto to Cool (2)
+        let currentState = homeKitMode;
+        if (homeKitMode === 3) {
+          currentState = 2; // Auto -> Cool for current state
+        }
+        this.acStates.CurrentHeatingCoolingState = currentState;
       }
       
       if (homeKitMode === 0) {
@@ -296,28 +338,35 @@ export class SamsungWindowACAccessory {
    * Handle "GET" requests from HomeKit for TargetHeatingCoolingState
    */
   async getTargetHeatingCoolingState(): Promise<CharacteristicValue> {
-    const state = this.acStates.TargetHeatingCoolingState;
-    this.platform.log.debug('Get Characteristic TargetHeatingCoolingState ->', state);
-    return state;
+    const status = await this.getDeviceStatus();
+    if (status) {
+      const acMode = status.components.main.airConditionerMode.airConditionerMode.value;
+      const homeKitMode = this.samsungModeToHomeKit(acMode);
+      this.acStates.TargetHeatingCoolingState = homeKitMode;
+      this.platform.log.debug(`Get Characteristic TargetHeatingCoolingState -> ${homeKitMode} (from mode: ${acMode})`);
+      return homeKitMode;
+    }
+    
+    // Fallback to cached state if API fails
+    this.platform.log.debug(`Get Characteristic TargetHeatingCoolingState -> ${this.acStates.TargetHeatingCoolingState} (cached)`);
+    return this.acStates.TargetHeatingCoolingState;
   }
 
   /**
    * Handle "GET" requests from HomeKit for CurrentTemperature
    */
   async getCurrentTemperature(): Promise<CharacteristicValue> {
-    // Get temperature from SmartThings API
-    const temperature = await this.platform.getCurrentTemperature();
-    
-    if (temperature !== null) {
+    const status = await this.getDeviceStatus();
+    if (status) {
+      const temperature = status.components.main.temperatureMeasurement.temperature.value;
       this.acStates.CurrentTemperature = temperature;
-      this.platform.log.debug('Get Characteristic CurrentTemperature from SmartThings ->', temperature);
+      this.platform.log.debug(`Get Characteristic CurrentTemperature -> ${temperature}°C`);
       return temperature;
-    } else {
-      // Fallback to cached temperature if API call fails
-      const cachedTemperature = this.acStates.CurrentTemperature;
-      this.platform.log.debug('Get Characteristic CurrentTemperature from cache ->', cachedTemperature);
-      return cachedTemperature;
     }
+    
+    // Fallback to cached state if API fails
+    this.platform.log.debug(`Get Characteristic CurrentTemperature -> ${this.acStates.CurrentTemperature}°C (cached)`);
+    return this.acStates.CurrentTemperature;
   }
 
   /**
@@ -344,26 +393,19 @@ export class SamsungWindowACAccessory {
    * Handle "GET" requests from HomeKit for TargetTemperature
    */
   async getTargetTemperature(): Promise<CharacteristicValue> {
-    // If in Auto mode, return HeatingThresholdTemperature
-    if (this.acStates.TargetHeatingCoolingState === 3) {
-      const autoTargetTemp = this.acStates.HeatingThresholdTemperature;
-      this.platform.log.debug('Auto mode: Get Characteristic TargetTemperature from HeatingThresholdTemperature ->', autoTargetTemp);
-      return autoTargetTemp;
-    }
-    
-    // Get target temperature from SmartThings API for other modes
-    const targetTemperature = await this.platform.getTargetTemperature();
-    
-    if (targetTemperature !== null) {
+    const status = await this.getDeviceStatus();
+    if (status) {
+      const targetTemperature = status.components.main.thermostatCoolingSetpoint.coolingSetpoint.value;
       this.acStates.TargetTemperature = targetTemperature;
-      this.platform.log.debug('Get Characteristic TargetTemperature from SmartThings ->', targetTemperature);
+      this.acStates.CoolingThresholdTemperature = targetTemperature;
+      this.acStates.HeatingThresholdTemperature = targetTemperature;
+      this.platform.log.debug(`Get Characteristic TargetTemperature -> ${targetTemperature}°C`);
       return targetTemperature;
-    } else {
-      // Fallback to cached temperature if API call fails
-      const cachedTemperature = this.acStates.TargetTemperature;
-      this.platform.log.debug('Get Characteristic TargetTemperature from cache ->', cachedTemperature);
-      return cachedTemperature;
     }
+    
+    // Fallback to cached state if API fails
+    this.platform.log.debug(`Get Characteristic TargetTemperature -> ${this.acStates.TargetTemperature}°C (cached)`);
+    return this.acStates.TargetTemperature;
   }
 
   /**
@@ -387,9 +429,17 @@ export class SamsungWindowACAccessory {
    * Handle "GET" requests from HomeKit for CoolingThresholdTemperature
    */
   async getCoolingThresholdTemperature(): Promise<CharacteristicValue> {
-    const temperature = this.acStates.CoolingThresholdTemperature;
-    this.platform.log.debug('Get Characteristic CoolingThresholdTemperature ->', temperature);
-    return temperature;
+    const status = await this.getDeviceStatus();
+    if (status) {
+      const targetTemperature = status.components.main.thermostatCoolingSetpoint.coolingSetpoint.value;
+      this.acStates.CoolingThresholdTemperature = targetTemperature;
+      this.platform.log.debug(`Get Characteristic CoolingThresholdTemperature -> ${targetTemperature}°C`);
+      return targetTemperature;
+    }
+    
+    // Fallback to cached state if API fails
+    this.platform.log.debug(`Get Characteristic CoolingThresholdTemperature -> ${this.acStates.CoolingThresholdTemperature}°C (cached)`);
+    return this.acStates.CoolingThresholdTemperature;
   }
 
   /**
@@ -424,9 +474,17 @@ export class SamsungWindowACAccessory {
    * Handle "GET" requests from HomeKit for HeatingThresholdTemperature
    */
   async getHeatingThresholdTemperature(): Promise<CharacteristicValue> {
-    const temperature = this.acStates.HeatingThresholdTemperature;
-    this.platform.log.debug('Get Characteristic HeatingThresholdTemperature ->', temperature);
-    return temperature;
+    const status = await this.getDeviceStatus();
+    if (status) {
+      const targetTemperature = status.components.main.thermostatCoolingSetpoint.coolingSetpoint.value;
+      this.acStates.HeatingThresholdTemperature = targetTemperature;
+      this.platform.log.debug(`Get Characteristic HeatingThresholdTemperature -> ${targetTemperature}°C`);
+      return targetTemperature;
+    }
+    
+    // Fallback to cached state if API fails
+    this.platform.log.debug(`Get Characteristic HeatingThresholdTemperature -> ${this.acStates.HeatingThresholdTemperature}°C (cached)`);
+    return this.acStates.HeatingThresholdTemperature;
   }
 
   /**
@@ -450,18 +508,16 @@ export class SamsungWindowACAccessory {
    * Handle "GET" requests from HomeKit for CurrentHumidity
    */
   async getCurrentHumidity(): Promise<CharacteristicValue> {
-    // Get humidity from SmartThings API
-    const humidity = await this.platform.getCurrentHumidity();
-    
-    if (humidity !== null) {
+    const status = await this.getDeviceStatus();
+    if (status) {
+      const humidity = status.components.main.relativeHumidityMeasurement.humidity.value;
       this.acStates.CurrentHumidity = humidity;
-      this.platform.log.debug('Get Characteristic CurrentHumidity from SmartThings ->', humidity);
+      this.platform.log.debug(`Get Characteristic CurrentRelativeHumidity -> ${humidity}%`);
       return humidity;
-    } else {
-      // Fallback to cached humidity if API call fails
-      const cachedHumidity = this.acStates.CurrentHumidity;
-      this.platform.log.debug('Get Characteristic CurrentHumidity from cache ->', cachedHumidity);
-      return cachedHumidity;
     }
+    
+    // Fallback to cached state if API fails
+    this.platform.log.debug(`Get Characteristic CurrentRelativeHumidity -> ${this.acStates.CurrentHumidity}% (cached)`);
+    return this.acStates.CurrentHumidity;
   }
 }

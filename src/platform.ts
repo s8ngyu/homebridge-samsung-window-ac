@@ -14,37 +14,6 @@ interface SmartThingsDevicesResponse {
   items: SmartThingsDevice[];
 }
 
-interface TemperatureResponse {
-  temperature: {
-    value: number;
-    unit: string;
-    timestamp: string;
-  };
-}
-
-interface HumidityResponse {
-  humidity: {
-    value: number;
-    unit: string;
-    timestamp: string;
-  };
-}
-
-interface AirConditionerModeResponse {
-  availableAcModes: {
-    value: string[];
-    timestamp: string;
-  };
-  supportedAcModes: {
-    value: string[];
-    timestamp: string;
-  };
-  airConditionerMode: {
-    value: string;
-    timestamp: string;
-  };
-}
-
 interface CommandResponse {
   results: Array<{
     id: string;
@@ -52,27 +21,45 @@ interface CommandResponse {
   }>;
 }
 
-interface SwitchResponse {
-  switch: {
-    value: string;
-    timestamp: string;
-  };
-}
 
-interface ThermostatCoolingSetpointResponse {
-  coolingSetpointRange: {
-    value: {
-      minimum: number;
-      maximum: number;
-      step: number;
+
+interface DeviceStatusResponse {
+  components: {
+    main: {
+      switch: {
+        switch: {
+          value: string;
+          timestamp: string;
+        };
+      };
+      temperatureMeasurement: {
+        temperature: {
+          value: number;
+          unit: string;
+          timestamp: string;
+        };
+      };
+      relativeHumidityMeasurement: {
+        humidity: {
+          value: number;
+          unit: string;
+          timestamp: string;
+        };
+      };
+      airConditionerMode: {
+        airConditionerMode: {
+          value: string;
+          timestamp: string;
+        };
+      };
+      thermostatCoolingSetpoint: {
+        coolingSetpoint: {
+          value: number;
+          unit: string;
+          timestamp: string;
+        };
+      };
     };
-    unit: string;
-    timestamp: string;
-  };
-  coolingSetpoint: {
-    value: number;
-    unit: string;
-    timestamp: string;
   };
 }
 
@@ -93,13 +80,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
   private deviceId: string | null = null;
 
   // Cache for API responses to avoid too many requests
-  private cache = {
-    temperature: { value: null as number | null, timestamp: 0 },
-    humidity: { value: null as number | null, timestamp: 0 },
-  };
-  
-  // Cache duration in milliseconds (5 minutes)
-  private readonly CACHE_DURATION = 5 * 60 * 1000;
+
 
   constructor(
     public readonly log: Logging,
@@ -228,24 +209,28 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
     }
   }
 
+
+
+
+
+
+
+
+
+
+
   /**
-   * Get current temperature from SmartThings API
+   * Get all device status from SmartThings API (single request)
    */
-  public async getCurrentTemperature(): Promise<number | null> {
+  public async getDeviceStatus(): Promise<DeviceStatusResponse | null> {
     if (!this.deviceId) {
       this.log.error('Device ID not available');
       return null;
     }
 
-    // Check cache first
-    if (this.cache.temperature.value !== null && this.isCacheValid(this.cache.temperature.timestamp)) {
-      this.log.debug(`Using cached temperature: ${this.cache.temperature.value}°C`);
-      return this.cache.temperature.value;
-    }
-
     try {
-      const response = await axios.get<TemperatureResponse>(
-        `https://api.smartthings.com/v1/devices/${this.deviceId}/components/main/capabilities/temperatureMeasurement/status`,
+      const response = await axios.get<DeviceStatusResponse>(
+        `https://api.smartthings.com/v1/devices/${this.deviceId}/status`,
         {
           headers: {
             'Authorization': `Bearer ${this.apiToken}`,
@@ -254,152 +239,10 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
         }
       );
 
-      const temperature = response.data.temperature.value;
-      this.updateCache('temperature', temperature);
-      this.log.debug(`Current temperature from SmartThings: ${temperature}°C`);
-      return temperature;
+      this.log.debug('Device status retrieved from SmartThings API');
+      return response.data;
     } catch (error) {
-      this.log.error('Failed to get temperature from SmartThings API:', error);
-      // Return cached value if available, even if expired
-      if (this.cache.temperature.value !== null) {
-        this.log.debug(`Using expired cached temperature: ${this.cache.temperature.value}°C`);
-        return this.cache.temperature.value;
-      }
-      return null;
-    }
-  }
-
-  /**
-   * Get current humidity from SmartThings API
-   */
-  public async getCurrentHumidity(): Promise<number | null> {
-    if (!this.deviceId) {
-      this.log.error('Device ID not available');
-      return null;
-    }
-
-    // Check cache first
-    if (this.cache.humidity.value !== null && this.isCacheValid(this.cache.humidity.timestamp)) {
-      this.log.debug(`Using cached humidity: ${this.cache.humidity.value}%`);
-      return this.cache.humidity.value;
-    }
-
-    try {
-      const response = await axios.get<HumidityResponse>(
-        `https://api.smartthings.com/v1/devices/${this.deviceId}/components/main/capabilities/relativeHumidityMeasurement/status`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      const humidity = response.data.humidity.value;
-      this.updateCache('humidity', humidity);
-      this.log.debug(`Current humidity from SmartThings: ${humidity}%`);
-      return humidity;
-    } catch (error) {
-      this.log.error('Failed to get humidity from SmartThings API:', error);
-      // Return cached value if available, even if expired
-      if (this.cache.humidity.value !== null) {
-        this.log.debug(`Using expired cached humidity: ${this.cache.humidity.value}%`);
-        return this.cache.humidity.value;
-      }
-      return null;
-    }
-  }
-
-  /**
-   * Get current air conditioner mode from SmartThings API
-   */
-  public async getCurrentACMode(): Promise<string | null> {
-    if (!this.deviceId) {
-      this.log.error('Device ID not available');
-      return null;
-    }
-
-    // First check if AC is turned on
-    const switchStatus = await this.getSwitchStatus();
-    if (switchStatus === 'off') {
-      this.log.debug('AC is turned off, returning off mode');
-      return 'off';
-    }
-
-    try {
-      const response = await axios.get<AirConditionerModeResponse>(
-        `https://api.smartthings.com/v1/devices/${this.deviceId}/components/main/capabilities/airConditionerMode/status`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      const mode = response.data.airConditionerMode.value;
-      this.log.debug(`Current AC mode from SmartThings: ${mode}`);
-      return mode;
-    } catch (error) {
-      this.log.error('Failed to get AC mode from SmartThings API:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Get current switch status from SmartThings API
-   */
-  public async getSwitchStatus(): Promise<string | null> {
-    if (!this.deviceId) {
-      this.log.error('Device ID not available');
-      return null;
-    }
-
-    try {
-      const response = await axios.get<SwitchResponse>(
-        `https://api.smartthings.com/v1/devices/${this.deviceId}/components/main/capabilities/switch/status`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      const switchStatus = response.data.switch.value;
-      this.log.debug(`Current switch status from SmartThings: ${switchStatus}`);
-      return switchStatus;
-    } catch (error) {
-      this.log.error('Failed to get switch status from SmartThings API:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Get target temperature from SmartThings API
-   */
-  public async getTargetTemperature(): Promise<number | null> {
-    if (!this.deviceId) {
-      this.log.error('Device ID not available');
-      return null;
-    }
-
-    try {
-      const response = await axios.get<ThermostatCoolingSetpointResponse>(
-        `https://api.smartthings.com/v1/devices/${this.deviceId}/components/main/capabilities/thermostatCoolingSetpoint/status`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      const targetTemperature = response.data.coolingSetpoint.value;
-      this.log.debug(`Target temperature from SmartThings: ${targetTemperature}°C`);
-      return targetTemperature;
-    } catch (error) {
-      this.log.error('Failed to get target temperature from SmartThings API:', error);
+      this.log.error('Failed to get device status from SmartThings API:', error);
       return null;
     }
   }
@@ -436,8 +279,6 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
       const result = response.data.results[0];
       if (result.status === 'COMPLETED') {
         this.log.info(`Successfully set target temperature to: ${temperature}°C`);
-        // Invalidate temperature cache when target temperature changes
-        this.invalidateCache('temperature');
         return true;
       } else {
         this.log.error(`Failed to set target temperature to ${temperature}°C. Status: ${result.status}`);
@@ -481,9 +322,6 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
       const result = response.data.results[0];
       if (result.status === 'COMPLETED') {
         this.log.info(`Successfully set AC mode to: ${mode}`);
-        // Invalidate temperature and humidity cache when mode changes
-        this.invalidateCache('temperature');
-        this.invalidateCache('humidity');
         return true;
       } else {
         this.log.error(`Failed to set AC mode to ${mode}. Status: ${result.status}`);
@@ -526,9 +364,6 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
       const result = response.data.results[0];
       if (result.status === 'COMPLETED') {
         this.log.info('Successfully turned off AC');
-        // Invalidate temperature and humidity cache when AC is turned off
-        this.invalidateCache('temperature');
-        this.invalidateCache('humidity');
         return true;
       } else {
         this.log.error(`Failed to turn off AC. Status: ${result.status}`);
@@ -540,33 +375,5 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  /**
-   * Check if cache is valid
-   */
-  private isCacheValid(timestamp: number): boolean {
-    return Date.now() - timestamp < this.CACHE_DURATION;
-  }
 
-  /**
-   * Update cache with new value
-   */
-  private updateCache(type: keyof typeof this.cache, value: any): void {
-    this.cache[type] = { value, timestamp: Date.now() };
-  }
-
-  /**
-   * Invalidate cache for a specific type or all
-   */
-  public invalidateCache(type?: keyof typeof this.cache): void {
-    if (type) {
-      this.cache[type] = { value: null, timestamp: 0 };
-      this.log.debug(`Invalidated cache for ${type}`);
-    } else {
-      this.cache = {
-        temperature: { value: null, timestamp: 0 },
-        humidity: { value: null, timestamp: 0 },
-      };
-      this.log.debug('Invalidated all cache');
-    }
-  }
 }
