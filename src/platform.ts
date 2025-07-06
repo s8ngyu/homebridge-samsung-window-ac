@@ -22,6 +22,14 @@ interface TemperatureResponse {
   };
 }
 
+interface HumidityResponse {
+  humidity: {
+    value: number;
+    unit: string;
+    timestamp: string;
+  };
+}
+
 /**
  * HomebridgePlatform
  * This class is the main constructor for your plugin, this is where you should
@@ -190,6 +198,35 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
       return temperature;
     } catch (error) {
       this.log.error('Failed to get temperature from SmartThings API:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get current humidity from SmartThings API
+   */
+  public async getCurrentHumidity(): Promise<number | null> {
+    if (!this.deviceId) {
+      this.log.error('Device ID not available');
+      return null;
+    }
+
+    try {
+      const response = await axios.get<HumidityResponse>(
+        `https://api.smartthings.com/v1/devices/${this.deviceId}/components/main/capabilities/relativeHumidityMeasurement/status`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const humidity = response.data.humidity.value;
+      this.log.debug(`Current humidity from SmartThings: ${humidity}%`);
+      return humidity;
+    } catch (error) {
+      this.log.error('Failed to get humidity from SmartThings API:', error);
       return null;
     }
   }

@@ -9,6 +9,7 @@ import type { SamsungWindowACPlatform } from './platform.js';
  */
 export class SamsungWindowACAccessory {
   private service: Service;
+  private humidityService: Service;
 
   /**
    * These are used to track the state of the air conditioner
@@ -21,6 +22,7 @@ export class SamsungWindowACAccessory {
     TargetTemperature: 24,
     CoolingThresholdTemperature: 24,
     HeatingThresholdTemperature: 24,
+    CurrentHumidity: 50,
     TemperatureDisplayUnits: 0, // 0: Celsius, 1: Fahrenheit
   };
 
@@ -56,6 +58,16 @@ export class SamsungWindowACAccessory {
     
     // Set initial active state
     this.service.setCharacteristic(this.platform.Characteristic.Active, false);
+
+    // Create humidity service
+    this.humidityService = this.accessory.getService(this.platform.Service.HumiditySensor) || 
+      this.accessory.addService(this.platform.Service.HumiditySensor);
+    
+    // Set humidity service name
+    this.humidityService.setCharacteristic(this.platform.Characteristic.Name, `${accessory.context.device.displayName} Humidity`);
+    
+    // Set initial humidity value
+    this.humidityService.setCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity, 50);
 
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Thermostat
@@ -115,6 +127,10 @@ export class SamsungWindowACAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .onSet(this.setTemperatureDisplayUnits.bind(this))
       .onGet(this.getTemperatureDisplayUnits.bind(this));
+
+    // register handlers for the CurrentRelativeHumidity Characteristic
+    this.humidityService.getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
+      .onGet(this.getCurrentHumidity.bind(this));
   }
 
   /**
@@ -287,5 +303,24 @@ export class SamsungWindowACAccessory {
     const units = this.acStates.TemperatureDisplayUnits;
     this.platform.log.debug('Get Characteristic TemperatureDisplayUnits ->', units);
     return units;
+  }
+
+  /**
+   * Handle "GET" requests from HomeKit for CurrentHumidity
+   */
+  async getCurrentHumidity(): Promise<CharacteristicValue> {
+    // Get humidity from SmartThings API
+    const humidity = await this.platform.getCurrentHumidity();
+    
+    if (humidity !== null) {
+      this.acStates.CurrentHumidity = humidity;
+      this.platform.log.debug('Get Characteristic CurrentHumidity from SmartThings ->', humidity);
+      return humidity;
+    } else {
+      // Fallback to cached humidity if API call fails
+      const cachedHumidity = this.acStates.CurrentHumidity;
+      this.platform.log.debug('Get Characteristic CurrentHumidity from cache ->', cachedHumidity);
+      return cachedHumidity;
+    }
   }
 }
