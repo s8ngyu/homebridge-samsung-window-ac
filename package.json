@@ -5,15 +5,15 @@
   "version": "1.0.0",
   "private": true,
   "description": "Homebridge plugin for Samsung Window Air Conditioners",
-  "author": "Your Name",
+  "author": "Soongyu Kwon",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/USERNAME/GITHUB_PROJECT_NAME#readme",
+  "homepage": "https://github.com/s8ngyu/homebridge-samsung-window-ac#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "https://github.com/s8ngyu/homebridge-samsung-window-ac.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/s8ngyu/homebridge-samsung-window-ac/issues"
   },
   "keywords": [
     "homebridge-plugin",
