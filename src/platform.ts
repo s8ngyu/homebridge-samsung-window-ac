@@ -188,12 +188,12 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
       const response = await axios.get<SmartThingsDevicesResponse>('https://api.smartthings.com/v1/devices', {
         headers: {
           'Authorization': `Bearer ${this.apiToken}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
 
       const samsungACDevice = response.data.items.find((device: SmartThingsDevice) => 
-        device.name === 'Samsung Window A/C' || device.label === 'Samsung Window A/C'
+        device.name === 'Samsung Window A/C' || device.label === 'Samsung Window A/C',
       );
 
       if (samsungACDevice) {
@@ -234,9 +234,9 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
         {
           headers: {
             'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
+            'Content-Type': 'application/json',
+          },
+        },
       );
 
       this.log.debug('Device status retrieved from SmartThings API');
@@ -264,16 +264,16 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
             {
               capability: 'thermostatCoolingSetpoint',
               command: 'setCoolingSetpoint',
-              arguments: [temperature]
-            }
-          ]
+              arguments: [temperature],
+            },
+          ],
         },
         {
           headers: {
             'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
+            'Content-Type': 'application/json',
+          },
+        },
       );
 
       const result = response.data.results[0];
@@ -307,16 +307,16 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
             {
               capability: 'airConditionerMode',
               command: 'setAirConditionerMode',
-              arguments: [mode]
-            }
-          ]
+              arguments: [mode],
+            },
+          ],
         },
         {
           headers: {
             'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
+            'Content-Type': 'application/json',
+          },
+        },
       );
 
       const result = response.data.results[0];
@@ -349,16 +349,16 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
           commands: [
             {
               capability: 'switch',
-              command: 'off'
-            }
-          ]
+              command: 'off',
+            },
+          ],
         },
         {
           headers: {
             'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
+            'Content-Type': 'application/json',
+          },
+        },
       );
 
       const result = response.data.results[0];

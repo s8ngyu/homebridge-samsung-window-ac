@@ -2,6 +2,47 @@ import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge
 
 import type { SamsungWindowACPlatform } from './platform.js';
 
+// Device status response type
+interface DeviceStatusResponse {
+  components: {
+    main: {
+      switch: {
+        switch: {
+          value: string;
+          timestamp: string;
+        };
+      };
+      temperatureMeasurement: {
+        temperature: {
+          value: number;
+          unit: string;
+          timestamp: string;
+        };
+      };
+      relativeHumidityMeasurement: {
+        humidity: {
+          value: number;
+          unit: string;
+          timestamp: string;
+        };
+      };
+      airConditionerMode: {
+        airConditionerMode: {
+          value: string;
+          timestamp: string;
+        };
+      };
+      thermostatCoolingSetpoint: {
+        coolingSetpoint: {
+          value: number;
+          unit: string;
+          timestamp: string;
+        };
+      };
+    };
+  };
+}
+
 // AC Mode mapping constants
 const AC_MODE_MAPPING = {
   // Samsung AC modes to HomeKit modes
@@ -48,7 +89,7 @@ export class SamsungWindowACAccessory {
    * Cache for device status to reduce API calls
    */
   private statusCache: {
-    data: any;
+    data: DeviceStatusResponse | null;
     timestamp: number;
   } | null = null;
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -70,7 +111,7 @@ export class SamsungWindowACAccessory {
   /**
    * Get device status with caching
    */
-  private async getDeviceStatus(): Promise<any> {
+  private async getDeviceStatus(): Promise<DeviceStatusResponse | null> {
     const now = Date.now();
     
     // Check if cache is valid
@@ -84,7 +125,7 @@ export class SamsungWindowACAccessory {
     if (status) {
       this.statusCache = {
         data: status,
-        timestamp: now
+        timestamp: now,
       };
       this.platform.log.debug('Updated device status cache');
     }
@@ -270,7 +311,7 @@ export class SamsungWindowACAccessory {
         // But we'll use Cool (2) for Auto mode since it's the most appropriate representation
         if (homeKitMode === 3) {
           this.acStates.CurrentHeatingCoolingState = 2; // Auto -> Cool for current state
-          this.platform.log.debug(`Auto mode detected, showing as Cool (2) for CurrentHeatingCoolingState`);
+          this.platform.log.debug('Auto mode detected, showing as Cool (2) for CurrentHeatingCoolingState');
         } else {
           this.acStates.CurrentHeatingCoolingState = homeKitMode;
         }
@@ -320,7 +361,7 @@ export class SamsungWindowACAccessory {
         let currentState = homeKitMode;
         if (homeKitMode === 3) {
           currentState = 2; // Auto -> Cool for current state
-          this.platform.log.debug(`Auto mode set, CurrentHeatingCoolingState will show as Cool (2)`);
+          this.platform.log.debug('Auto mode set, CurrentHeatingCoolingState will show as Cool (2)');
         }
         this.acStates.CurrentHeatingCoolingState = currentState;
       }
@@ -330,7 +371,9 @@ export class SamsungWindowACAccessory {
         this.platform.log.info('Successfully turned off AC');
       } else if (homeKitMode === 3) {
         this.acStates.Active = true;
-        this.platform.log.info(`Successfully changed AC mode to ${samsungMode} (HomeKit: ${homeKitMode}) with target temperature: ${this.acStates.HeatingThresholdTemperature}°C`);
+        this.platform.log.info(
+          `Successfully changed AC mode to ${samsungMode} (HomeKit: ${homeKitMode}) with target temperature: ${this.acStates.HeatingThresholdTemperature}°C`
+        );
       } else {
         this.acStates.Active = true;
         this.platform.log.info(`Successfully changed AC mode to ${samsungMode} (HomeKit: ${homeKitMode})`);
