@@ -2,7 +2,7 @@
   "name": "homebridge-samsung-window-ac",
   "displayName": "Homebridge Samsung Window AC",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Homebridge plugin for Samsung Window Air Conditioners",
   "author": "Soongyu Kwon",
   "license": "Apache-2.0",
