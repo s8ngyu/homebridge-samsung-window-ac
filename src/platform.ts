@@ -77,19 +77,21 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
    */
   async discoverDevices() {
     // Get device ID from SmartThings API
-    this.deviceId = await this.getDeviceId();
+    const deviceInfo = await this.getDeviceId();
     
-    if (!this.deviceId) {
+    if (!deviceInfo) {
       this.log.error('Failed to get Samsung Window A/C device ID. Cannot register accessory.');
       return;
     }
 
+    this.deviceId = deviceInfo.deviceId;
+
     // Create Samsung AC device object
     const samsungACDevice = {
-      uniqueId: this.deviceId,
-      displayName: 'Samsung Window A/C',
+      uniqueId: deviceInfo.deviceId,
+      displayName: deviceInfo.deviceInfo.label || 'Samsung Window A/C',
       model: 'Samsung WindFree',
-      serialNumber: this.deviceId,
+      serialNumber: deviceInfo.deviceId,
     };
 
     // generate a unique id for the accessory
@@ -137,7 +139,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
   /**
    * Get device ID from SmartThings API
    */
-  private async getDeviceId(): Promise<string | null> {
+  private async getDeviceId(): Promise<{ deviceId: string; deviceInfo: SmartThingsDevice } | null> {
     try {
       const response = await axios.get<SmartThingsDevicesResponse>('https://api.smartthings.com/v1/devices', {
         headers: {
@@ -151,8 +153,8 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
       );
 
       if (samsungACDevice) {
-        this.log.info(`Found Samsung Window A/C device: ${samsungACDevice.deviceId}`);
-        return samsungACDevice.deviceId;
+        this.log.info(`Found Samsung Window A/C device: ${samsungACDevice.deviceId} (${samsungACDevice.label})`);
+        return { deviceId: samsungACDevice.deviceId, deviceInfo: samsungACDevice };
       } else {
         this.log.error('Samsung Window A/C device not found in SmartThings devices');
         return null;
