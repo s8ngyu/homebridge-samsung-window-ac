@@ -256,6 +256,14 @@ export class SamsungWindowACAccessory {
     if (homeKitMode === 0) {
       // Off mode - use switch off command
       success = await this.platform.turnOffAC();
+    } else if (homeKitMode === 3) {
+      // Auto mode (aIComfort) - use HeatingThresholdTemperature as target
+      const targetTemp = this.acStates.HeatingThresholdTemperature;
+      success = await this.platform.setACMode(samsungMode);
+      if (success) {
+        // Set target temperature to HeatingThresholdTemperature value
+        await this.platform.setTargetTemperature(targetTemp);
+      }
     } else {
       // Other modes - use airConditionerMode command
       success = await this.platform.setACMode(samsungMode);
@@ -271,6 +279,9 @@ export class SamsungWindowACAccessory {
       if (homeKitMode === 0) {
         this.acStates.Active = false;
         this.platform.log.info('Successfully turned off AC');
+      } else if (homeKitMode === 3) {
+        this.acStates.Active = true;
+        this.platform.log.info(`Successfully changed AC mode to ${samsungMode} (HomeKit: ${homeKitMode}) with target temperature: ${this.acStates.HeatingThresholdTemperature}°C`);
       } else {
         this.acStates.Active = true;
         this.platform.log.info(`Successfully changed AC mode to ${samsungMode} (HomeKit: ${homeKitMode})`);
@@ -333,7 +344,14 @@ export class SamsungWindowACAccessory {
    * Handle "GET" requests from HomeKit for TargetTemperature
    */
   async getTargetTemperature(): Promise<CharacteristicValue> {
-    // Get target temperature from SmartThings API
+    // If in Auto mode, return HeatingThresholdTemperature
+    if (this.acStates.TargetHeatingCoolingState === 3) {
+      const autoTargetTemp = this.acStates.HeatingThresholdTemperature;
+      this.platform.log.debug('Auto mode: Get Characteristic TargetTemperature from HeatingThresholdTemperature ->', autoTargetTemp);
+      return autoTargetTemp;
+    }
+    
+    // Get target temperature from SmartThings API for other modes
     const targetTemperature = await this.platform.getTargetTemperature();
     
     if (targetTemperature !== null) {
@@ -389,6 +407,17 @@ export class SamsungWindowACAccessory {
     }
     
     this.platform.log.debug('Set Characteristic HeatingThresholdTemperature ->', this.acStates.HeatingThresholdTemperature);
+    
+    // If currently in Auto mode, update target temperature
+    if (this.acStates.TargetHeatingCoolingState === 3) {
+      const success = await this.platform.setTargetTemperature(this.acStates.HeatingThresholdTemperature);
+      if (success) {
+        this.acStates.TargetTemperature = this.acStates.HeatingThresholdTemperature;
+        this.platform.log.info(`Auto mode: Updated target temperature to ${this.acStates.HeatingThresholdTemperature}°C`);
+      } else {
+        this.platform.log.error(`Auto mode: Failed to update target temperature to ${this.acStates.HeatingThresholdTemperature}°C`);
+      }
+    }
   }
 
   /**
