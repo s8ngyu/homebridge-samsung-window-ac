@@ -2,6 +2,24 @@ import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge
 
 import type { SamsungWindowACPlatform } from './platform.js';
 
+// AC Mode mapping constants
+const AC_MODE_MAPPING = {
+  // Samsung AC modes to HomeKit modes
+  'off': 0,      // Off
+  'cool': 2,     // Cool
+  'dry': 1,      // Heat (mapped to Dry)
+  'aIComfort': 3, // Auto (mapped to AI Comfort)
+  'fan': 0,      // Fan mode ignored, mapped to Off
+} as const;
+
+const HOMEKIT_MODE_MAPPING = {
+  // HomeKit modes to Samsung AC modes
+  0: 'off',      // Off
+  1: 'dry',      // Heat -> Dry
+  2: 'cool',     // Cool
+  3: 'aIComfort', // Auto -> AI Comfort
+} as const;
+
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -25,6 +43,20 @@ export class SamsungWindowACAccessory {
     CurrentHumidity: 50,
     TemperatureDisplayUnits: 0, // 0: Celsius, 1: Fahrenheit
   };
+
+  /**
+   * Convert Samsung AC mode to HomeKit mode
+   */
+  private samsungModeToHomeKit(samsungMode: string): number {
+    return AC_MODE_MAPPING[samsungMode as keyof typeof AC_MODE_MAPPING] ?? 0;
+  }
+
+  /**
+   * Convert HomeKit mode to Samsung AC mode
+   */
+  private homeKitModeToSamsung(homeKitMode: number): string {
+    return HOMEKIT_MODE_MAPPING[homeKitMode as keyof typeof HOMEKIT_MODE_MAPPING] ?? 'off';
+  }
 
   constructor(
     private readonly platform: SamsungWindowACPlatform,
@@ -137,50 +169,116 @@ export class SamsungWindowACAccessory {
    * Handle "SET" requests from HomeKit for Active
    */
   async setActive(value: CharacteristicValue) {
-    this.acStates.Active = value as boolean;
+    const isActive = value as boolean;
     
-    if (!this.acStates.Active) {
-      this.acStates.CurrentHeatingCoolingState = 0;
-      this.acStates.TargetHeatingCoolingState = 0;
+    this.platform.log.debug(`Set Characteristic Active -> ${isActive}`);
+    
+    if (isActive) {
+      // Turn on AC - set to current target mode
+      const samsungMode = this.homeKitModeToSamsung(this.acStates.TargetHeatingCoolingState);
+      const success = await this.platform.setACMode(samsungMode);
+      
+      if (success) {
+        this.acStates.Active = true;
+        this.acStates.CurrentHeatingCoolingState = this.acStates.TargetHeatingCoolingState;
+        this.platform.log.info(`Successfully turned on AC with mode: ${samsungMode}`);
+      } else {
+        this.platform.log.error(`Failed to turn on AC with mode: ${samsungMode}`);
+        // Don't update local state if API call failed
+      }
+    } else {
+      // Turn off AC using switch capability
+      const success = await this.platform.turnOffAC();
+      
+      if (success) {
+        this.acStates.Active = false;
+        this.acStates.CurrentHeatingCoolingState = 0;
+        this.acStates.TargetHeatingCoolingState = 0;
+        this.platform.log.info('Successfully turned off AC');
+      } else {
+        this.platform.log.error('Failed to turn off AC');
+        // Don't update local state if API call failed
+      }
     }
-
-    this.platform.log.debug('Set Characteristic Active ->', value);
-    
-    // TODO: Implement actual Samsung AC control here
-    // This is where you would send commands to the Samsung AC device
   }
 
   /**
    * Handle "GET" requests from HomeKit for Active
    */
   async getActive(): Promise<CharacteristicValue> {
-    const isActive = this.acStates.Active;
-    this.platform.log.debug('Get Characteristic Active ->', isActive);
-    return isActive;
+    // Get switch status from SmartThings API
+    const switchStatus = await this.platform.getSwitchStatus();
+    
+    if (switchStatus !== null) {
+      const isActive = switchStatus === 'on';
+      this.acStates.Active = isActive;
+      this.platform.log.debug(`Get Characteristic Active from SmartThings (${switchStatus}) -> ${isActive}`);
+      return isActive;
+    } else {
+      // Fallback to cached state if API call fails
+      const cachedActive = this.acStates.Active;
+      this.platform.log.debug('Get Characteristic Active from cache ->', cachedActive);
+      return cachedActive;
+    }
   }
 
   /**
    * Handle "GET" requests from HomeKit for CurrentHeatingCoolingState
    */
   async getCurrentHeatingCoolingState(): Promise<CharacteristicValue> {
-    const state = this.acStates.CurrentHeatingCoolingState;
-    this.platform.log.debug('Get Characteristic CurrentHeatingCoolingState ->', state);
-    return state;
+    // Get AC mode from SmartThings API
+    const samsungMode = await this.platform.getCurrentACMode();
+    
+    if (samsungMode !== null) {
+      const homeKitMode = this.samsungModeToHomeKit(samsungMode);
+      this.acStates.CurrentHeatingCoolingState = homeKitMode;
+      this.platform.log.debug(`Get Characteristic CurrentHeatingCoolingState from SmartThings (${samsungMode} -> ${homeKitMode})`);
+      return homeKitMode;
+    } else {
+      // Fallback to cached state if API call fails
+      const cachedState = this.acStates.CurrentHeatingCoolingState;
+      this.platform.log.debug('Get Characteristic CurrentHeatingCoolingState from cache ->', cachedState);
+      return cachedState;
+    }
   }
 
   /**
    * Handle "SET" requests from HomeKit for TargetHeatingCoolingState
    */
   async setTargetHeatingCoolingState(value: CharacteristicValue) {
-    this.acStates.TargetHeatingCoolingState = value as number;
+    const homeKitMode = value as number;
+    const samsungMode = this.homeKitModeToSamsung(homeKitMode);
     
-    if (this.acStates.Active) {
-      this.acStates.CurrentHeatingCoolingState = value as number;
+    this.platform.log.debug(`Set Characteristic TargetHeatingCoolingState (${homeKitMode} -> ${samsungMode})`);
+    
+    let success = false;
+    
+    if (homeKitMode === 0) {
+      // Off mode - use switch off command
+      success = await this.platform.turnOffAC();
+    } else {
+      // Other modes - use airConditionerMode command
+      success = await this.platform.setACMode(samsungMode);
     }
-
-    this.platform.log.debug('Set Characteristic TargetHeatingCoolingState ->', value);
     
-    // TODO: Implement actual Samsung AC control here
+    if (success) {
+      this.acStates.TargetHeatingCoolingState = homeKitMode;
+      
+      if (this.acStates.Active) {
+        this.acStates.CurrentHeatingCoolingState = homeKitMode;
+      }
+      
+      if (homeKitMode === 0) {
+        this.acStates.Active = false;
+        this.platform.log.info('Successfully turned off AC');
+      } else {
+        this.acStates.Active = true;
+        this.platform.log.info(`Successfully changed AC mode to ${samsungMode} (HomeKit: ${homeKitMode})`);
+      }
+    } else {
+      this.platform.log.error(`Failed to change AC mode to ${samsungMode} (HomeKit: ${homeKitMode})`);
+      // Don't update local state if API call failed
+    }
   }
 
   /**
@@ -216,24 +314,38 @@ export class SamsungWindowACAccessory {
    */
   async setTargetTemperature(value: CharacteristicValue) {
     const temperature = value as number;
-    this.acStates.TargetTemperature = temperature;
     
-    // Sync with threshold temperatures
-    this.acStates.CoolingThresholdTemperature = temperature;
-    this.acStates.HeatingThresholdTemperature = temperature;
+    this.platform.log.debug(`Set Characteristic TargetTemperature -> ${temperature}°C`);
     
-    this.platform.log.debug('Set Characteristic TargetTemperature ->', temperature);
+    // Send command to SmartThings API to set target temperature
+    const success = await this.platform.setTargetTemperature(temperature);
     
-    // TODO: Implement actual Samsung AC control here
+    if (success) {
+      this.acStates.TargetTemperature = temperature;
+      this.platform.log.info(`Successfully set target temperature to ${temperature}°C`);
+    } else {
+      this.platform.log.error(`Failed to set target temperature to ${temperature}°C`);
+      // Don't update local state if API call failed
+    }
   }
 
   /**
    * Handle "GET" requests from HomeKit for TargetTemperature
    */
   async getTargetTemperature(): Promise<CharacteristicValue> {
-    const temperature = this.acStates.TargetTemperature;
-    this.platform.log.debug('Get Characteristic TargetTemperature ->', temperature);
-    return temperature;
+    // Get target temperature from SmartThings API
+    const targetTemperature = await this.platform.getTargetTemperature();
+    
+    if (targetTemperature !== null) {
+      this.acStates.TargetTemperature = targetTemperature;
+      this.platform.log.debug('Get Characteristic TargetTemperature from SmartThings ->', targetTemperature);
+      return targetTemperature;
+    } else {
+      // Fallback to cached temperature if API call fails
+      const cachedTemperature = this.acStates.TargetTemperature;
+      this.platform.log.debug('Get Characteristic TargetTemperature from cache ->', cachedTemperature);
+      return cachedTemperature;
+    }
   }
 
   /**
