@@ -6,38 +6,11 @@
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
-        "title": "Platform Name",
+      "apiToken": {
+        "title": "API Token",
         "type": "string",
         "required": true,
-        "default": "Samsung Window AC"
-      },
-      "devices": {
-        "title": "Samsung AC Devices",
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "title": "Device Name",
-              "type": "string",
-              "required": true,
-              "description": "Display name for the air conditioner"
-            },
-            "ip": {
-              "title": "Device IP Address",
-              "type": "string",
-              "required": true,
-              "description": "IP address of the Samsung AC device"
-            },
-            "mac": {
-              "title": "Device MAC Address",
-              "type": "string",
-              "required": true,
-              "description": "MAC address of the Samsung AC device"
-            }
-          }
-        }
+        "description": "Samsung SmartThings API token for controlling your air conditioner"
       }
     }
   }

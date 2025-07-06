@@ -19,6 +19,8 @@ export class SamsungWindowACAccessory {
     TargetHeatingCoolingState: 0, // 0: Off, 1: Heat, 2: Cool, 3: Auto
     CurrentTemperature: 24,
     TargetTemperature: 24,
+    CoolingThresholdTemperature: 24,
+    HeatingThresholdTemperature: 24,
     TemperatureDisplayUnits: 0, // 0: Celsius, 1: Fahrenheit
   };
 
@@ -64,6 +66,26 @@ export class SamsungWindowACAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onSet(this.setTargetTemperature.bind(this))
       .onGet(this.getTargetTemperature.bind(this));
+
+    // register handlers for the CoolingThresholdTemperature Characteristic
+    this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
+      .onSet(this.setCoolingThresholdTemperature.bind(this))
+      .onGet(this.getCoolingThresholdTemperature.bind(this))
+      .setProps({
+        minValue: 18,
+        maxValue: 30,
+        minStep: 1,
+      });
+
+    // register handlers for the HeatingThresholdTemperature Characteristic
+    this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+      .onSet(this.setHeatingThresholdTemperature.bind(this))
+      .onGet(this.getHeatingThresholdTemperature.bind(this))
+      .setProps({
+        minValue: 18,
+        maxValue: 30,
+        minStep: 1,
+      });
 
     // register handlers for the TemperatureDisplayUnits Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
@@ -143,8 +165,17 @@ export class SamsungWindowACAccessory {
    * Handle "SET" requests from HomeKit for TargetTemperature
    */
   async setTargetTemperature(value: CharacteristicValue) {
-    this.acStates.TargetTemperature = value as number;
-    this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
+    const temperature = value as number;
+    
+    // Validate temperature range
+    if (temperature < 18 || temperature > 30) {
+      this.platform.log.warn(`Temperature ${temperature} is out of range (18-30). Clamping to valid range.`);
+      this.acStates.TargetTemperature = Math.max(18, Math.min(30, temperature));
+    } else {
+      this.acStates.TargetTemperature = temperature;
+    }
+    
+    this.platform.log.debug('Set Characteristic TargetTemperature ->', this.acStates.TargetTemperature);
     
     // TODO: Implement actual Samsung AC control here
   }
@@ -155,6 +186,40 @@ export class SamsungWindowACAccessory {
   async getTargetTemperature(): Promise<CharacteristicValue> {
     const temperature = this.acStates.TargetTemperature;
     this.platform.log.debug('Get Characteristic TargetTemperature ->', temperature);
+    return temperature;
+  }
+
+  /**
+   * Handle "SET" requests from HomeKit for CoolingThresholdTemperature
+   */
+  async setCoolingThresholdTemperature(value: CharacteristicValue) {
+    this.acStates.CoolingThresholdTemperature = value as number;
+    this.platform.log.debug('Set Characteristic CoolingThresholdTemperature ->', value);
+  }
+
+  /**
+   * Handle "GET" requests from HomeKit for CoolingThresholdTemperature
+   */
+  async getCoolingThresholdTemperature(): Promise<CharacteristicValue> {
+    const temperature = this.acStates.CoolingThresholdTemperature;
+    this.platform.log.debug('Get Characteristic CoolingThresholdTemperature ->', temperature);
+    return temperature;
+  }
+
+  /**
+   * Handle "SET" requests from HomeKit for HeatingThresholdTemperature
+   */
+  async setHeatingThresholdTemperature(value: CharacteristicValue) {
+    this.acStates.HeatingThresholdTemperature = value as number;
+    this.platform.log.debug('Set Characteristic HeatingThresholdTemperature ->', value);
+  }
+
+  /**
+   * Handle "GET" requests from HomeKit for HeatingThresholdTemperature
+   */
+  async getHeatingThresholdTemperature(): Promise<CharacteristicValue> {
+    const temperature = this.acStates.HeatingThresholdTemperature;
+    this.platform.log.debug('Get Characteristic HeatingThresholdTemperature ->', temperature);
     return temperature;
   }
 
