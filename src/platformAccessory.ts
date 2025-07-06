@@ -403,9 +403,22 @@ export class SamsungWindowACAccessory {
     const status = await this.getDeviceStatus();
     if (status) {
       const targetTemperature = status.components.main.thermostatCoolingSetpoint.coolingSetpoint.value;
+      const acMode = status.components.main.airConditionerMode.airConditionerMode.value;
+      const homeKitMode = this.samsungModeToHomeKit(acMode);
+      
       this.acStates.TargetTemperature = targetTemperature;
-      this.acStates.CoolingThresholdTemperature = targetTemperature;
       this.acStates.HeatingThresholdTemperature = targetTemperature;
+      
+      // For Auto mode, set CoolingThresholdTemperature to HeatingThresholdTemperature + 4°C (max 30°C)
+      // This makes it easier to control in HomeKit when the knobs are not at the same point
+      if (homeKitMode === 3) { // Auto mode
+        const coolingThreshold = Math.min(targetTemperature + 4, 30);
+        this.acStates.CoolingThresholdTemperature = coolingThreshold;
+        this.platform.log.debug(`Auto mode: HeatingThresholdTemperature=${targetTemperature}°C, CoolingThresholdTemperature=${coolingThreshold}°C`);
+      } else {
+        this.acStates.CoolingThresholdTemperature = targetTemperature;
+      }
+      
       this.platform.log.debug(`Get Characteristic TargetTemperature -> ${targetTemperature}°C`);
       return targetTemperature;
     }
@@ -429,7 +442,25 @@ export class SamsungWindowACAccessory {
       this.acStates.CoolingThresholdTemperature = temperature;
     }
     
-    this.platform.log.debug('Set Characteristic CoolingThresholdTemperature ->', this.acStates.CoolingThresholdTemperature);
+    this.platform.log.debug(`Set Characteristic CoolingThresholdTemperature -> ${this.acStates.CoolingThresholdTemperature}°C`);
+    
+    // If in Auto mode, update HeatingThresholdTemperature to CoolingThresholdTemperature - 4°C (min 18°C)
+    if (this.acStates.TargetHeatingCoolingState === 3) {
+      const heatingThreshold = Math.max(this.acStates.CoolingThresholdTemperature - 4, 18);
+      this.acStates.HeatingThresholdTemperature = heatingThreshold;
+      this.platform.log.debug(`Auto mode: Updated HeatingThresholdTemperature to ${heatingThreshold}°C (CoolingThresholdTemperature - 4°C)`);
+      
+      // Send command to SmartThings API to set target temperature to HeatingThresholdTemperature
+      const success = await this.platform.setTargetTemperature(this.acStates.HeatingThresholdTemperature);
+      
+      if (success) {
+        this.acStates.TargetTemperature = this.acStates.HeatingThresholdTemperature;
+        this.platform.log.info(`Auto mode: Successfully set target temperature to ${this.acStates.HeatingThresholdTemperature}°C`);
+      } else {
+        this.platform.log.error(`Auto mode: Failed to set target temperature to ${this.acStates.HeatingThresholdTemperature}°C`);
+        // Don't update local state if API call failed
+      }
+    }
   }
 
   /**
@@ -439,9 +470,20 @@ export class SamsungWindowACAccessory {
     const status = await this.getDeviceStatus();
     if (status) {
       const targetTemperature = status.components.main.thermostatCoolingSetpoint.coolingSetpoint.value;
-      this.acStates.CoolingThresholdTemperature = targetTemperature;
-      this.platform.log.debug(`Get Characteristic CoolingThresholdTemperature -> ${targetTemperature}°C`);
-      return targetTemperature;
+      const acMode = status.components.main.airConditionerMode.airConditionerMode.value;
+      const homeKitMode = this.samsungModeToHomeKit(acMode);
+      
+      // For Auto mode, set CoolingThresholdTemperature to HeatingThresholdTemperature + 4°C (max 30°C)
+      if (homeKitMode === 3) { // Auto mode
+        const coolingThreshold = Math.min(targetTemperature + 4, 30);
+        this.acStates.CoolingThresholdTemperature = coolingThreshold;
+        this.platform.log.debug(`Auto mode: CoolingThresholdTemperature=${coolingThreshold}°C (HeatingThresholdTemperature + 4°C)`);
+        return coolingThreshold;
+      } else {
+        this.acStates.CoolingThresholdTemperature = targetTemperature;
+        this.platform.log.debug(`Get Characteristic CoolingThresholdTemperature -> ${targetTemperature}°C`);
+        return targetTemperature;
+      }
     }
     
     // Fallback to cached state if API fails
@@ -463,17 +505,24 @@ export class SamsungWindowACAccessory {
       this.acStates.HeatingThresholdTemperature = temperature;
     }
     
-    this.platform.log.debug('Set Characteristic HeatingThresholdTemperature ->', this.acStates.HeatingThresholdTemperature);
+    this.platform.log.debug(`Set Characteristic HeatingThresholdTemperature -> ${this.acStates.HeatingThresholdTemperature}°C`);
     
-    // If currently in Auto mode, update target temperature
+    // If in Auto mode, also update CoolingThresholdTemperature to HeatingThresholdTemperature + 4°C (max 30°C)
     if (this.acStates.TargetHeatingCoolingState === 3) {
-      const success = await this.platform.setTargetTemperature(this.acStates.HeatingThresholdTemperature);
-      if (success) {
-        this.acStates.TargetTemperature = this.acStates.HeatingThresholdTemperature;
-        this.platform.log.info(`Auto mode: Updated target temperature to ${this.acStates.HeatingThresholdTemperature}°C`);
-      } else {
-        this.platform.log.error(`Auto mode: Failed to update target temperature to ${this.acStates.HeatingThresholdTemperature}°C`);
-      }
+      const coolingThreshold = Math.min(this.acStates.HeatingThresholdTemperature + 4, 30);
+      this.acStates.CoolingThresholdTemperature = coolingThreshold;
+      this.platform.log.debug(`Auto mode: Updated CoolingThresholdTemperature to ${coolingThreshold}°C (HeatingThresholdTemperature + 4°C)`);
+    }
+    
+    // Send command to SmartThings API to set target temperature
+    const success = await this.platform.setTargetTemperature(this.acStates.HeatingThresholdTemperature);
+    
+    if (success) {
+      this.acStates.TargetTemperature = this.acStates.HeatingThresholdTemperature;
+      this.platform.log.info(`Successfully set target temperature to ${this.acStates.HeatingThresholdTemperature}°C`);
+    } else {
+      this.platform.log.error(`Failed to set target temperature to ${this.acStates.HeatingThresholdTemperature}°C`);
+      // Don't update local state if API call failed
     }
   }
 
