@@ -156,9 +156,19 @@ export class SamsungWindowACAccessory {
    * Handle "GET" requests from HomeKit for CurrentTemperature
    */
   async getCurrentTemperature(): Promise<CharacteristicValue> {
-    const temperature = this.acStates.CurrentTemperature;
-    this.platform.log.debug('Get Characteristic CurrentTemperature ->', temperature);
-    return temperature;
+    // Get temperature from SmartThings API
+    const temperature = await this.platform.getCurrentTemperature();
+    
+    if (temperature !== null) {
+      this.acStates.CurrentTemperature = temperature;
+      this.platform.log.debug('Get Characteristic CurrentTemperature from SmartThings ->', temperature);
+      return temperature;
+    } else {
+      // Fallback to cached temperature if API call fails
+      const cachedTemperature = this.acStates.CurrentTemperature;
+      this.platform.log.debug('Get Characteristic CurrentTemperature from cache ->', cachedTemperature);
+      return cachedTemperature;
+    }
   }
 
   /**
