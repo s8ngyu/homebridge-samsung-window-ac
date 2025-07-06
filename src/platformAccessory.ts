@@ -372,7 +372,7 @@ export class SamsungWindowACAccessory {
       } else if (homeKitMode === 3) {
         this.acStates.Active = true;
         this.platform.log.info(
-          `Successfully changed AC mode to ${samsungMode} (HomeKit: ${homeKitMode}) with target temperature: ${this.acStates.HeatingThresholdTemperature}°C`
+          `Successfully changed AC mode to ${samsungMode} (HomeKit: ${homeKitMode}) with target temperature: ${this.acStates.HeatingThresholdTemperature}°C`,
         );
       } else {
         this.acStates.Active = true;
