@@ -139,6 +139,25 @@ export class SamsungWindowACAccessory {
   }
 
   /**
+   * Check if device physical state has changed (on/off)
+   */
+  private async checkPhysicalStateChange(): Promise<boolean> {
+    const status = await this.getDeviceStatus();
+    if (!status) {
+      return false;
+    }
+    
+    const currentPhysicalState = status.components.main.switch.switch.value === 'on';
+    const cachedPhysicalState = this.characteristicCaches.Active?.value;
+    
+    // If no cached state or state has changed, return true
+    if (cachedPhysicalState === undefined || cachedPhysicalState !== currentPhysicalState) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Get device status with caching
    */
   private async getDeviceStatus(): Promise<DeviceStatusResponse | null> {
@@ -327,6 +346,15 @@ export class SamsungWindowACAccessory {
     const cacheKey = 'Active';
     const now = Date.now();
     
+    // Check if physical state has changed
+    const physicalStateChanged = await this.checkPhysicalStateChange();
+    
+    // If physical state changed, clear all caches and force refresh
+    if (physicalStateChanged) {
+      this.clearCharacteristicCaches();
+      this.platform.log.debug('Physical state changed, cleared all caches');
+    }
+    
     // Check if we have a valid cache for this characteristic
     if (this.characteristicCaches[cacheKey] && 
         (now - this.characteristicCaches[cacheKey].timestamp) < this.CHARACTERISTIC_CACHE_DURATION) {
@@ -361,6 +389,15 @@ export class SamsungWindowACAccessory {
   async getCurrentHeatingCoolingState(): Promise<CharacteristicValue> {
     const cacheKey = 'CurrentHeatingCoolingState';
     const now = Date.now();
+    
+    // Check if physical state has changed
+    const physicalStateChanged = await this.checkPhysicalStateChange();
+    
+    // If physical state changed, clear all caches and force refresh
+    if (physicalStateChanged) {
+      this.clearCharacteristicCaches();
+      this.platform.log.debug('Physical state changed, cleared all caches');
+    }
     
     // Check if we have a valid cache for this characteristic
     if (this.characteristicCaches[cacheKey] && 
@@ -491,6 +528,15 @@ export class SamsungWindowACAccessory {
     const cacheKey = 'TargetHeatingCoolingState';
     const now = Date.now();
     
+    // Check if physical state has changed
+    const physicalStateChanged = await this.checkPhysicalStateChange();
+    
+    // If physical state changed, clear all caches and force refresh
+    if (physicalStateChanged) {
+      this.clearCharacteristicCaches();
+      this.platform.log.debug('Physical state changed, cleared all caches');
+    }
+    
     // Check if we have a valid cache for this characteristic
     if (this.characteristicCaches[cacheKey] && 
         (now - this.characteristicCaches[cacheKey].timestamp) < this.CHARACTERISTIC_CACHE_DURATION) {
@@ -502,7 +548,23 @@ export class SamsungWindowACAccessory {
     const status = await this.getDeviceStatus();
     if (status) {
       const acMode = status.components.main.airConditionerMode.airConditionerMode.value;
+      const isActive = status.components.main.switch.switch.value === 'on';
       const homeKitMode = this.samsungModeToHomeKit(acMode);
+      
+      // If device is physically off, return 0 (Off)
+      if (!isActive) {
+        this.acStates.TargetHeatingCoolingState = 0;
+        
+        // Cache the result
+        this.characteristicCaches[cacheKey] = {
+          value: 0,
+          timestamp: now,
+        };
+        
+        this.platform.log.debug('Device is physically off, TargetHeatingCoolingState set to 0');
+        return 0;
+      }
+      
       this.acStates.TargetHeatingCoolingState = homeKitMode;
       
       // Cache the result
