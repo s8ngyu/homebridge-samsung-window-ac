@@ -99,7 +99,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
       config.clientId,
       config.clientSecret,
       config.refreshToken,
-      storageDir
+      storageDir,
     );
 
     this.log.debug('Finished initializing platform:', this.config.name);

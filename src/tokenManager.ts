@@ -30,7 +30,7 @@ export class TokenManager {
     private readonly clientId: string,
     private readonly clientSecret: string,
     private readonly initialRefreshToken: string,
-    private readonly storageDir: string
+    private readonly storageDir: string,
   ) {
     this.tokenFilePath = path.join(this.storageDir, 'tokens.json');
     this.refreshToken = this.initialRefreshToken;
@@ -98,7 +98,7 @@ export class TokenManager {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
           },
-        }
+        },
       );
 
       this.accessToken = response.data.access_token;
@@ -132,7 +132,7 @@ export class TokenManager {
       await fs.promises.writeFile(
         this.tokenFilePath,
         JSON.stringify(tokens, null, 2),
-        'utf8'
+        'utf8',
       );
 
       this.log.debug('Tokens saved to file');
