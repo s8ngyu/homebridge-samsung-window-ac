@@ -1,7 +1,9 @@
 import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
+import * as path from 'path';
 
 import { SamsungWindowACAccessory } from './platformAccessory.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+import { TokenManager } from './tokenManager.js';
 import axios from 'axios';
 
 interface SmartThingsDevice {
@@ -76,7 +78,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
   public readonly accessories: Map<string, PlatformAccessory> = new Map();
   public readonly discoveredCacheUUIDs: string[] = [];
 
-  private apiToken: string;
+  private tokenManager: TokenManager;
   private deviceId: string | null = null;
 
   // Cache for API responses to avoid too many requests
@@ -89,7 +91,16 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
   ) {
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
-    this.apiToken = config.apiToken;
+
+    // Initialize token manager
+    const storageDir = path.join(this.api.user.storagePath(), 'samsung-window-ac');
+    this.tokenManager = new TokenManager(
+      this.log,
+      config.clientId,
+      config.clientSecret,
+      config.refreshToken,
+      storageDir
+    );
 
     this.log.debug('Finished initializing platform:', this.config.name);
 
@@ -97,10 +108,18 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
     // Dynamic Platform plugins should only register new accessories after this event was fired,
     // in order to ensure they weren't added to homebridge already. This event can also be used
     // to start discovery of new accessories.
-    this.api.on('didFinishLaunching', () => {
+    this.api.on('didFinishLaunching', async () => {
       log.debug('Executed didFinishLaunching callback');
-      // run the method to discover / register your devices as accessories
-      this.discoverDevices();
+      
+      try {
+        // Initialize token manager
+        await this.tokenManager.initialize();
+        
+        // run the method to discover / register your devices as accessories
+        this.discoverDevices();
+      } catch (error) {
+        this.log.error('Failed to initialize token manager:', error);
+      }
     });
   }
 
@@ -185,9 +204,10 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
    */
   private async getDeviceId(): Promise<{ deviceId: string; deviceInfo: SmartThingsDevice } | null> {
     try {
+      const accessToken = await this.tokenManager.getAccessToken();
       const response = await axios.get<SmartThingsDevicesResponse>('https://api.smartthings.com/v1/devices', {
         headers: {
-          'Authorization': `Bearer ${this.apiToken}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
       });
@@ -229,11 +249,12 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
     }
 
     try {
+      const accessToken = await this.tokenManager.getAccessToken();
       const response = await axios.get<DeviceStatusResponse>(
         `https://api.smartthings.com/v1/devices/${this.deviceId}/status`,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
         },
@@ -257,6 +278,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
     }
 
     try {
+      const accessToken = await this.tokenManager.getAccessToken();
       const response = await axios.post<CommandResponse>(
         `https://api.smartthings.com/v1/devices/${this.deviceId}/commands`,
         {
@@ -270,7 +292,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
         },
@@ -300,6 +322,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
     }
 
     try {
+      const accessToken = await this.tokenManager.getAccessToken();
       const response = await axios.post<CommandResponse>(
         `https://api.smartthings.com/v1/devices/${this.deviceId}/commands`,
         {
@@ -313,7 +336,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
         },
@@ -343,6 +366,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
     }
 
     try {
+      const accessToken = await this.tokenManager.getAccessToken();
       const response = await axios.post<CommandResponse>(
         `https://api.smartthings.com/v1/devices/${this.deviceId}/commands`,
         {
@@ -355,7 +379,7 @@ export class SamsungWindowACPlatform implements DynamicPlatformPlugin {
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
         },
