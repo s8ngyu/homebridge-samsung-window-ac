@@ -6,11 +6,23 @@
   "schema": {
     "type": "object",
     "properties": {
-      "apiToken": {
-        "title": "API Token",
+      "clientId": {
+        "title": "Client ID",
         "type": "string",
         "required": true,
-        "description": "Samsung SmartThings API token for controlling your air conditioner"
+        "description": "Samsung SmartThings Client ID for OAuth authentication"
+      },
+      "clientSecret": {
+        "title": "Client Secret",
+        "type": "string",
+        "required": true,
+        "description": "Samsung SmartThings Client Secret for OAuth authentication"
+      },
+      "refreshToken": {
+        "title": "Refresh Token",
+        "type": "string",
+        "required": true,
+        "description": "Samsung SmartThings Refresh Token for obtaining access tokens"
       }
     }
   }
