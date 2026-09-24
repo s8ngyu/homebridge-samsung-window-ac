@@ -3,6 +3,7 @@ dist
 
 # ------------- Defaults ------------- #
 .DS_Store
+._*
 
 # Logs
 logs
@@ -124,3 +125,7 @@ dist
 .idea
 
 /test/hbConfig
+
+# Local Homebridge credentials and OAuth state
+config.json
+tokens*.json

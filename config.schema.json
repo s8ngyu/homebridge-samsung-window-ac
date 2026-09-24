@@ -6,24 +6,35 @@
   "schema": {
     "type": "object",
     "properties": {
-      "clientId": {
-        "title": "Client ID",
-        "type": "string",
-        "required": true,
-        "description": "Samsung SmartThings Client ID for OAuth authentication"
-      },
-      "clientSecret": {
-        "title": "Client Secret",
-        "type": "string",
-        "required": true,
-        "description": "Samsung SmartThings Client Secret for OAuth authentication"
-      },
-      "refreshToken": {
-        "title": "Refresh Token",
-        "type": "string",
-        "required": true,
-        "description": "Samsung SmartThings Refresh Token for obtaining access tokens"
-      }
+      "name": { "title": "HomeKit name", "type": "string", "default": "Samsung Window AC" },
+      "deviceId": { "title": "SmartThings device ID", "type": "string", "description": "Recommended. Keeps the HomeKit accessory available when SmartThings discovery is offline." },
+      "deviceIp": { "title": "Air conditioner LAN IP", "type": "string", "description": "Optional address for identification. Control uses SmartThings because this model has no open local control port." },
+      "componentId": { "title": "SmartThings component", "type": "string", "default": "main" },
+      "authMode": { "title": "Authentication", "type": "string", "enum": ["oauth", "pat"], "default": "oauth", "description": "OAuth refresh tokens are suitable for continuous use. New personal access tokens expire after 24 hours." },
+      "personalAccessToken": { "title": "Personal access token", "type": "string", "format": "password" },
+      "clientId": { "title": "OAuth client ID", "type": "string" },
+      "clientSecret": { "title": "OAuth client secret", "type": "string", "format": "password" },
+      "refreshToken": { "title": "OAuth refresh token", "type": "string", "format": "password" },
+      "pollInterval": { "title": "Status polling interval (seconds)", "type": "integer", "minimum": 10, "maximum": 3600, "default": 30 },
+      "requestTimeout": { "title": "API timeout (seconds)", "type": "integer", "minimum": 2, "maximum": 60, "default": 10 },
+      "minimumTemperature": { "title": "Minimum target temperature (°C)", "type": "number", "default": 18 },
+      "maximumTemperature": { "title": "Maximum target temperature (°C)", "type": "number", "default": 30 },
+      "temperatureStep": { "title": "Temperature step (°C)", "type": "number", "default": 1 },
+      "autoThresholdGap": { "title": "Auto mode HomeKit threshold gap (°C)", "type": "number", "default": 4 },
+      "coolMode": { "title": "SmartThings cool mode", "type": "string", "default": "cool" },
+      "dryMode": { "title": "SmartThings dry mode (shown as Heat)", "type": "string", "default": "dry" },
+      "autoMode": { "title": "SmartThings auto mode", "type": "string", "default": "aIComfort" },
+      "fanOnlyMode": { "title": "SmartThings fan only mode", "type": "string", "default": "fan" },
+      "fanModes": { "title": "Fan modes, comma separated", "type": "string", "default": "auto,1,2,3,4,5" },
+      "swingOnMode": { "title": "Swing on value", "type": "string", "default": "horizontal" },
+      "swingOffMode": { "title": "Swing off value", "type": "string", "default": "fixed" },
+      "powerCapability": { "title": "Power capability", "type": "string", "default": "switch" },
+      "modeCapability": { "title": "AC mode capability", "type": "string", "default": "airConditionerMode" },
+      "setpointCapability": { "title": "Cooling setpoint capability", "type": "string", "default": "thermostatCoolingSetpoint" },
+      "temperatureCapability": { "title": "Temperature capability", "type": "string", "default": "temperatureMeasurement" },
+      "humidityCapability": { "title": "Humidity capability", "type": "string", "default": "relativeHumidityMeasurement" },
+      "fanCapability": { "title": "Fan mode capability", "type": "string", "default": "airConditionerFanMode" },
+      "swingCapability": { "title": "Swing capability", "type": "string", "default": "fanOscillationMode" }
     }
   }
 }

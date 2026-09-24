@@ -1,149 +1,45 @@
 # Homebridge Samsung Window AC
 
-A Homebridge plugin that integrates Samsung Window Air Conditioners with Apple HomeKit.
+Homebridge integration for a Samsung window air conditioner through the current SmartThings Devices API. The plugin exposes a thermostat, humidity sensor, and fan controls in Apple Home.
 
-## Features
+## Setup
 
-- ✅ Samsung Window AC temperature control
-- ✅ Humidity monitoring
-- ✅ Air conditioner mode control (Off, Cool, Heat, Auto)
-- ✅ Real-time status synchronization
-- ✅ SmartThings API integration
-- ✅ HomeKit automation support
+Install or link the plugin, then open its settings in Homebridge UI. Set the **SmartThings device ID** and choose an authentication method:
 
-## Supported Modes
+- **OAuth**: enter a client ID, client secret, and fresh refresh token. The plugin refreshes access tokens automatically and writes rotated tokens to `samsung-window-ac/tokens-v2.json` in Homebridge's storage directory with mode `0600`. If you change the credentials in settings, the plugin discards the old stored tokens.
+- **Personal access token**: enter a token with device read and command access. [New SmartThings personal access tokens expire after 24 hours](https://developer.smartthings.com/docs/getting-started/authorization-and-permissions), so this is useful for testing and requires replacement for continued use.
 
-| HomeKit Mode | Samsung AC Mode | Description |
-|-------------|----------------|-------------|
-| Off | Off | Turn off air conditioner |
-| Cool | Cool | Cooling mode |
-| Heat | Dry | Dehumidification mode (mapped to Heat) |
-| Auto | AI Comfort | AI Comfort mode |
+The device ID can be found through the SmartThings API or SmartThings CLI. If omitted, the plugin selects the sole device with air conditioner capabilities. Set it explicitly if you have multiple air conditioners or want the cached HomeKit accessory to remain visible while SmartThings is unavailable.
 
-## Installation
+The optional **Air conditioner LAN IP** setting can be changed in Homebridge UI. This Samsung model does not expose a local control port on the network, so commands and status use SmartThings. The IP is used as identification metadata when a device ID is unavailable.
 
-### 1. Install Homebridge
+Save settings and restart Homebridge to apply changes.
 
-First, make sure you have Homebridge installed. If not:
+SmartThings requires a public HTTPS hostname to complete OAuth authorization for this app. Its authorization page rejected localhost and a private LAN IP during testing. A redirect URI is needed only for a new authorization; normal device control and automatic token refresh do not cause browser redirects. If the token store and its configured refresh token are both lost or revoked, a callback URI will need to be registered again for reauthorization.
 
-```bash
-sudo npm install -g homebridge homebridge-config-ui-x
-```
+The plugin renews OAuth credentials independently of AC status every six hours while Homebridge is running, and also refreshes on demand before API calls. Unplugging the AC does not pause renewal. [SmartThings says refresh tokens last 30 days](https://developer.smartthings.com/docs/service-integrations/architecture-and-auth-flow), so if the Pi or Homebridge stays off for more than 30 days, reauthorization may be necessary.
 
-### 2. Install Plugin
+## Controls
 
-```bash
-sudo npm install -g homebridge-samsung-window-ac
-```
+| Apple Home | SmartThings command |
+| --- | --- |
+| Off | `switch.off` |
+| Cool | `airConditionerMode.setAirConditionerMode("cool")` and power on |
+| Heat | `airConditionerMode.setAirConditionerMode("dry")` and power on |
+| Auto | `airConditionerMode.setAirConditionerMode("aIComfort")` and power on |
+| Target temperature | `thermostatCoolingSetpoint.setCoolingSetpoint` |
+| Fan speed | `airConditionerFanMode.setFanMode` |
+| Swing | `fanOscillationMode.setFanOscillationMode` |
+| Fan Only switch | `airConditionerMode.setAirConditionerMode("fan")` |
 
-### 3. Set up SmartThings API Token
+The **Heat** label represents the AC's **Dry** mode for compatibility with the previous plugin. It does not heat the room. In Auto, Apple Home's cooling threshold is the actual AC target; the heating threshold is shown below it by the configurable threshold gap. The unit's current temperature and humidity are read from SmartThings. Fan speed and swing appear as a separate Fan service, and Fan Only as a switch.
 
-1. Log in to [SmartThings Developer Console](https://smartthings.developer.samsung.com/)
-2. Create a Personal Access Token
-3. Copy the token and enter it in the configuration
-
-## Configuration
-
-### Using Homebridge Config UI X
-
-1. Access Homebridge Config UI X
-2. Find "Samsung Window AC" in the plugins tab
-3. Enter your SmartThings API token in the settings
-4. Save and restart
-
-### Manual Configuration
-
-Add the following configuration to your `config.json` file:
-
-```json
-{
-  "platforms": [
-    {
-      "platform": "SamsungWindowAC",
-      "name": "Samsung Window AC",
-      "apiToken": "your-smartthings-api-token-here"
-    }
-  ]
-}
-```
-
-## Usage
-
-### In HomeKit App
-
-1. Open the Home app
-2. Select the air conditioner accessory
-3. Control temperature, change modes, turn on/off
-
-### Automation Setup
-
-- "Turn on AC when temperature is above 25°C"
-- "Switch to dehumidification mode when humidity is above 70%"
-- "Turn off AC when leaving home"
-
-## Troubleshooting
-
-### 429 Too Many Requests Error
-
-The plugin optimizes API calls to prevent 429 errors:
-- Uses unified status API to reduce call frequency
-- 5-minute caching to prevent unnecessary requests
-
-### Air Conditioner Not Detected
-
-1. Verify the air conditioner is properly connected in the SmartThings app
-2. Check if the API token is correct
-3. Check error messages in Homebridge logs
-
-### Temperature Control in Auto Mode
-
-In Auto mode:
-- HeatingThresholdTemperature is the actual target temperature
-- CoolingThresholdTemperature is HeatingThresholdTemperature + 4°C (max 30°C)
-- This setup makes it easier to control in HomeKit
+The installed device reports an 18–30°C setpoint, fan modes `auto,1,2,3,4,5`, and swing modes `fixed,horizontal`. These and the polling interval, timeout, mode names, component, and capability IDs can all be changed in Homebridge settings for other models.
 
 ## Development
 
-### Local Development Environment Setup
-
-```bash
-# Clone repository
-git clone https://github.com/s8ngyu/homebridge-samsung-window-ac.git
-cd homebridge-samsung-window-ac
-
-# Install dependencies
-npm install
-
-# Build
+```sh
+npm ci
 npm run build
-
-# Link to Homebridge
-npm link
-
-# Run in development mode
-npm run watch
-```
-
-### Build
-
-```bash
-npm run build
-```
-
-### Lint
-
-```bash
 npm run lint
 ```
-
-## License
-
-Apache License 2.0
-
-## Contributing
-
-Bug reports, feature requests, and pull requests are welcome!
-
-## Support
-
-If you have issues or questions, please contact us via [GitHub Issues](https://github.com/s8ngyu/homebridge-samsung-window-ac/issues).
