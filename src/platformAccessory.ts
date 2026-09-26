@@ -295,13 +295,14 @@ export class SamsungWindowACAccessory {
     const mode = value === Characteristic.TargetHeatingCoolingState.HEAT ? settings.dryMode :
       value === Characteristic.TargetHeatingCoolingState.AUTO ? settings.autoMode : settings.coolMode;
     const supported = this.value(settings.modeCapability || 'airConditionerMode', 'availableAcModes');
-    if (Array.isArray(supported) && !supported.includes(mode)) {
+    // Samsung reports an empty list while the AC is off, not an unsupported mode.
+    if (Array.isArray(supported) && supported.length > 0 && !supported.includes(mode)) {
       throw this.communicationError();
     }
-    await this.command(settings.modeCapability || 'airConditionerMode', 'setAirConditionerMode', [mode]);
     if (!this.isOn()) {
       await this.setPower(true);
     }
+    await this.command(settings.modeCapability || 'airConditionerMode', 'setAirConditionerMode', [mode]);
   }
 
   private async setTemperature(value: number): Promise<void> {
@@ -328,10 +329,10 @@ export class SamsungWindowACAccessory {
   private async setFanOnly(on: boolean): Promise<void> {
     const { settings } = this.platform;
     if (on) {
-      await this.command(settings.modeCapability || 'airConditionerMode', 'setAirConditionerMode', [settings.fanOnlyMode]);
       if (!this.isOn()) {
         await this.setPower(true);
       }
+      await this.command(settings.modeCapability || 'airConditionerMode', 'setAirConditionerMode', [settings.fanOnlyMode]);
     } else if (this.isOn() && this.samsungMode() === settings.fanOnlyMode) {
       await this.command(settings.modeCapability || 'airConditionerMode', 'setAirConditionerMode', [settings.coolMode]);
     }
